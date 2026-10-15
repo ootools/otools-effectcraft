@@ -269,6 +269,11 @@ pub async fn start(canvas_id: String) -> Result<(), JsValue> {
                 // The ScriptUI panels open on the last visit open again.
                 let _ = session.execute("window.restoreScriptPanels", json!({}));
                 let mut app = EffectcraftApp::new(session);
+                // wasm 读不到系统字体：内嵌 CJK + 阿拉伯 fallback，否则中文/日文/阿拉伯文方框。
+                effectcraft_ui_egui::theme::set_extra_fallback_fonts(vec![
+                    ("otools-cjk".into(), std::sync::Arc::new(eframe::egui::FontData::from_static(include_bytes!("../assets/fonts/otools-cjk-subset.ttf")))),
+                    ("otools-arabic".into(), std::sync::Arc::new(eframe::egui::FontData::from_static(include_bytes!("../assets/fonts/otools-arabic-subset.ttf")))),
+                ]);
                 app.set_gpu_failure_bridge(gpu_failures);
                 app.ui.start_screen = home;
                 if let Some(r) = recovery.filter(|r| !restored && r.autosave.is_some()) {
