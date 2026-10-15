@@ -1,0 +1,63 @@
+diff --git a/crates/engine/src/commands/help.rs b/crates/engine/src/commands/help.rs
+index c6f315f..88015a1 100644
+--- a/crates/engine/src/commands/help.rs
++++ b/crates/engine/src/commands/help.rs
+@@ -31,7 +31,6 @@ fn docs(s: &mut Session, p: &Value) -> Result<Value> {
+ pub fn specs() -> Vec<CommandSpec> {
+     vec![
+         cmd!("help.docs", "EffectCraft Help...", [], Some("F1"), "{page?: help|scripting|expressions|effects|agents}", always, docs),
+-        cmd!("help.discord", "Join the ArtCraft Discord...", ["Help"], None, "{}", always, |s, _| open(s, links::DISCORD.into())),
+         cmd!("help.website", "ArtCraft Website", ["Help"], None, "{}", always, |s, _| open(s, links::WEBSITE.into())),
+         cmd!("help.appPage", "EffectCraft Home Page", ["Help"], None, "{}", always, |s, _| open(s, links::APP_PAGE.into())),
+         cmd!("help.github", "EffectCraft on GitHub", ["Help"], None, "{}", always, |s, _| open(s, links::GITHUB.into())),
+diff --git a/crates/ui-egui/src/header.rs b/crates/ui-egui/src/header.rs
+index fb381cf..b9be19f 100644
+--- a/crates/ui-egui/src/header.rs
++++ b/crates/ui-egui/src/header.rs
+@@ -184,20 +184,6 @@ pub fn show(app: &mut EffectcraftApp, ui: &mut egui::Ui, rect: Rect) {
+ 
+     // Right side: community buttons, workspaces.
+     let mut rx = rect.max.x - 10.0;
+-    // The pill fits its label (icon, gap, text) with even padding: it was a fixed 104 px with the
+-    // text at its left, which left a wide gap on the right (#581).
+-    let label = p.layout_no_wrap(tr("Discord").to_string(), Tokens::semibold(12.0), Color32::WHITE);
+-    let discord = Rect::from_min_max(pos2(rx - (10.0 + 14.0 + 6.0 + label.size().x + 12.0), cy - 13.0), pos2(rx, cy + 13.0));
+-    let dresp = ui.interact(discord, egui::Id::new("hdr-discord"), Sense::click());
+-    let dc = Color32::from_rgb(0x58, 0x65, 0xf2);
+-    p.rect_filled(discord, 13.0, if dresp.hovered() { dc.gamma_multiply(1.2) } else { dc });
+-    icons::paint(&p, Rect::from_center_size(pos2(discord.min.x + 17.0, cy), vec2(14.0, 14.0)), Icon::Chat, Color32::WHITE);
+-    p.galley(pos2(discord.min.x + 30.0, cy - label.size().y / 2.0), label, Color32::WHITE);
+-    app.auto.add("header.discord", discord, "Join the ArtCraft Discord");
+-    if dresp.on_hover_text(tr("Join the ArtCraft community on Discord")).clicked() {
+-        let _ = app.session.execute("help.discord", json!({}));
+-    }
+-    rx = discord.min.x - 6.0;
+     for (id, icon, tip, cmd) in
+         [("hdr-github", Icon::Code, "EffectCraft on GitHub", "help.github"), ("hdr-web", Icon::Globe, "EffectCraft on getartcraft.com", "help.appPage")]
+     {
+diff --git a/crates/ui-egui/src/panels/dialogs.rs b/crates/ui-egui/src/panels/dialogs.rs
+index d773fc4..117a715 100644
+--- a/crates/ui-egui/src/panels/dialogs.rs
++++ b/crates/ui-egui/src/panels/dialogs.rs
+@@ -338,8 +338,7 @@ fn about_main(app: &mut EffectcraftApp, ui: &mut egui::Ui, t: &Tokens, cmd: &mut
+     ui.add_space(12.0);
+     ui.label(tr("A clean-room, open-source compositor for motion graphics and visual effects: native on macOS, Windows and Linux, and in the browser. Part of the ArtCraft family of creative apps."));
+     ui.add_space(14.0);
+-    let links: [(Icon, &str, &str, &'static str); 4] = [
+-        (Icon::Chat, "Join the ArtCraft Discord", effectcraft_engine::links::DISCORD, "help.discord"),
++    let links: [(Icon, &str, &str, &'static str); 3] = [
+         (Icon::Globe, "ArtCraft website", effectcraft_engine::links::WEBSITE, "help.website"),
+         (Icon::Sparkle, "EffectCraft home page", effectcraft_engine::links::APP_PAGE, "help.appPage"),
+         (Icon::Code, "Source code on GitHub", effectcraft_engine::links::GITHUB, "help.github"),
+diff --git a/crates/ui-egui/src/panels/home.rs b/crates/ui-egui/src/panels/home.rs
+index 46bbb44..535a2e5 100644
+--- a/crates/ui-egui/src/panels/home.rs
++++ b/crates/ui-egui/src/panels/home.rs
+@@ -272,7 +272,6 @@ fn rail_ui(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Painter, rail:
+     }
+     // Community links at the foot (below the pages when the window is short).
+     let links = [
+-        (Icon::Chat, "Join the ArtCraft Discord", "help.discord"),
+         (Icon::Globe, "getartcraft.com", "help.website"),
+         (Icon::Globe, "EffectCraft home page", "help.appPage"),
+         (Icon::Code, "EffectCraft on GitHub", "help.github"),

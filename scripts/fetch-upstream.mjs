@@ -49,17 +49,36 @@ function currentHead() {
   return r.status === 0 ? r.stdout.trim() : null;
 }
 
-// 已经是 pinned commit 且没有脏改动：直接跳过（省一次几十 MB 的下载）。
+// 拉取后把 shell/patches/*.patch 应用到 upstream/，让「隐藏社区按钮」等本地改动与
+// 上游快照分离——重新拉取上游时由本脚本重新应用，不会丢失。幂等：已应用过则跳过。
+function applyPatches() {
+  const patchDir = path.join(repoRoot, 'shell', 'patches');
+  if (!fs.existsSync(patchDir)) return;
+  const patches = fs.readdirSync(patchDir).filter((f) => f.endsWith('.patch')).sort();
+  for (const name of patches) {
+    const p = path.join(patchDir, name);
+    const chk = exec(['apply', '--check', p], upstreamDir);
+    if (chk.status !== 0) {
+      const rev = exec(['apply', '--reverse', '--check', p], upstreamDir);
+      if (rev.status === 0) { console.log(`  · 补丁已应用，跳过 ${name}`); continue; }
+      console.error(`  ⚠️ 补丁 ${name} 无法应用（上游可能已变动）：${(chk.stderr || chk.stdout || '').trim()}`);
+      continue;
+    }
+    const r = exec(['apply', p], upstreamDir);
+    console.log(r.status === 0 ? `  ✓ 已应用补丁 ${name}` : `  ⚠️ 应用补丁失败 ${name}：${(r.stderr || r.stdout || '').trim()}`);
+  }
+}
+
+// 已经是 pinned commit：直接应用本地补丁（幂等）并跳过拉取，省一次几十 MB 的下载。
+// 本地补丁会让工作区变脏，但不影响可复现性，故不据此重新拉取。
 if (!force && fs.existsSync(path.join(upstreamDir, '.git'))) {
   const head = currentHead();
   if (head === pin.commit) {
-    const dirty = exec(['status', '--porcelain'], upstreamDir).stdout.trim();
-    if (!dirty) {
-      console.log(`upstream/ 已是 ${pin.upstream}@${shortSha}，跳过拉取。`);
-      process.exit(0);
-    }
-    console.log('upstream/ 有本地改动，重新拉取对齐 pinned commit。');
+    applyPatches();
+    console.log(`upstream/ 已是 ${pin.upstream}@${shortSha}（已应用本地补丁），跳过拉取。`);
+    process.exit(0);
   }
+  console.log('upstream/ 的 HEAD 与 pinned commit 不符，重新拉取对齐。');
 }
 
 if (checkOnly) {
@@ -121,6 +140,8 @@ for (const [label, url] of transports) {
     console.error(`  SHA 不符：期望 ${pin.commit}，实际 ${got}`);
     continue;
   }
+
+  applyPatches();
 
   console.log(`✓ 成功（${label}）：${pin.upstream}@${shortSha}`);
   console.log(`upstream/ 已就位 → ${upstreamDir}`);
