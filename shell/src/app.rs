@@ -203,11 +203,17 @@ pub async fn start(canvas_id: String) -> Result<(), JsValue> {
     browse::restore();
     diskcache::init();
     storage::refresh();
+    // macOS WKWebView（WebKit）里 WebGPU 设备获取经常静默失败，导致画布全白、且无报错。
+    // 强制走 WebGL2 后端（与 filmcraft 已验证可用的路径一致），eframe 在 WebGL2 下正常渲染。
+    let mut options = eframe::WebOptions::default();
+    if let eframe::egui_wgpu::WgpuSetup::CreateNew(create) = &mut options.wgpu_options.wgpu_setup {
+        create.instance_descriptor.backends = eframe::wgpu::Backends::GL;
+    }
     let runner = eframe::WebRunner::new();
     runner
         .start(
             canvas,
-            eframe::WebOptions::default(),
+            options,
             Box::new(move |cc| {
                 CTX.with(|c| *c.borrow_mut() = Some(cc.egui_ctx.clone()));
                 // The page owns this shared presentation device; worker devices retain their
