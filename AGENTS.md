@@ -82,8 +82,13 @@ diskcache / frames / worker / api / store），业务 crate（engine / ui-egui /
 3. **`files.rs::download()` 接宿主写盘**：在 OTools 里走 `otools::deliver`
    （宿主另存对话框 + `writeHostFile`），不在宿主里才退回浏览器下载。
 
-**未移植**：打开素材仍走上游的 `<input type=file>`（没有接到宿主的打开对话框）；
-OPFS 不可用时 `persist` 会退到内存，功能正常但不持久化。
+**刻意保留（不是未移植）**：打开素材走上游的 `<input type=file>`（见
+`files.rs::pick()`，265 行起）。这条路径**不碰 `window.otools` 宿主桥**——字节是
+浏览器原生 `File.array_buffer()` 给的——所以：
+- 桌面端：Tauri WebView2 弹的是原生 OS 文件对话框，体验和宿主对话框一致；
+- 网页版：零依赖，代码一行不用改就能跑（宿主对话框在网页版会因为 `window.otools`
+  不存在而直接炸）。
+对「打开单个素材」这个场景，`<input type=file>` 是更优解，不用换成宿主对话框。
+（代价只是没有媒体浏览器/序列帧自动发现这类「浏览整个磁盘」的能力，与本场景无关。）
 
-**下一步值得做的**：把 `browse.rs` / `files.rs` 的导入路径换成宿主打开对话框，
-和另外几个 craft 插件保持一致。
+OPFS 不可用时 `persist` 会退到内存，功能正常但不持久化。
