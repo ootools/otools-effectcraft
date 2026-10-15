@@ -16,6 +16,11 @@ extern "C" {
     #[wasm_bindgen(js_namespace = effectcraftOtools, js_name = "available")]
     fn host_available() -> bool;
 
+    /// 宿主界面语言（BCP 47，如 `zh-CN`）：OTools 注入到插件 webview 的
+    /// `window.__OTOOLS_LOCALE__.locale` / `document.documentElement.lang`。
+    #[wasm_bindgen(js_namespace = effectcraftOtools, js_name = "language")]
+    fn host_language_raw() -> String;
+
     /// `{name, dataBase64, forcePick}` → `{path}` 或 `null`（用户取消）。
     #[wasm_bindgen(js_namespace = effectcraftOtools, js_name = "saveFile")]
     fn host_save_file(request: JsValue) -> js_sys::Promise;
@@ -24,6 +29,17 @@ extern "C" {
 /// 宿主是否可用（不在 OTools 里时退回上游的浏览器下载）。
 pub fn available() -> bool {
     host_available()
+}
+
+/// 宿主界面语言（BCP 47，如 `zh-CN`）：跟随 OTools 宿主语言切换。
+pub fn host_language() -> String {
+    host_language_raw()
+}
+
+/// 社区/外部链接（Discord、ArtCraft 官网、上游 GitHub）：在 OTools 插件里点这些
+/// 会把用户拽到外部，让插件不纯粹。语言切换监听与链接屏蔽用到它。
+pub fn is_community_url(url: &str) -> bool {
+    url.contains("discord.gg") || url.contains("getartcraft.com") || url.contains("github.com/storytold")
 }
 
 /// 把字节交给宿主写盘。异步进行：调用方（同步的 `download`）立刻返回。

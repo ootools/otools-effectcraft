@@ -1,6 +1,6 @@
 //! The app: startup (storage, session restore, hooks), the eframe app and the page glue.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -9,6 +9,8 @@ use effectcraft_engine::Session;
 use crate::{api, audio, browse, diskcache, files, frames, persist, storage, worker};
 use effectcraft_ui_egui::EffectcraftApp;
 use serde_json::json;
+use wasm_bindgen::closure::Closure;
+use wasm_bindgen::JsCast as _;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(module = "/js/host.js")]
@@ -41,6 +43,8 @@ pub fn page_url(rel: &str) -> String {
 thread_local! {
     static ACTIONS: RefCell<Vec<Action>> = const { RefCell::new(Vec::new()) };
     static CTX: RefCell<Option<egui::Context>> = const { RefCell::new(None) };
+    /// 宿主语言切换后，下一帧把 host locale 写进 interface_language 偏好并重渲染。
+    static NEEDS_LANG_SYNC: Cell<bool> = const { Cell::new(true) };
 }
 
 /// Run `f` on the UI thread at the next frame.
@@ -95,12 +99,27 @@ impl eframe::App for WebApp {
         for f in actions {
             f(&mut self.app);
         }
+        // 跟随宿主语言：切换后下一帧把 host locale 写进 interface_language 偏好（重渲染）。
+        if NEEDS_LANG_SYNC.with(|f| f.replace(false)) {
+            let code = host_lang_code(&crate::otools::host_language());
+            if self.app.session.prefs.general.language != code {
+                self.app.session.prefs.general.language = code;
+            }
+        }
         // Files dropped on the page: read them, then open/import.
         let dropped: Vec<web_sys::File> = ctx.input(|i| i.raw.dropped_files.iter().filter_map(|f| f.web_file().cloned()).collect());
         if !dropped.is_empty() {
             files::read_files(dropped, |paths| post(move |app| open_or_import(app, paths)));
         }
         self.app.logic(ctx, frame);
+        // 让插件更纯粹：吞掉所有社区/外部链接（Discord、ArtCraft 官网、上游 GitHub），
+        // 点击不再跳出插件。文档内普通链接不受影响。
+        ctx.output_mut(|o| {
+            o.commands.retain(|c| match c {
+                egui::OutputCommand::OpenUrl(u) => !crate::otools::is_community_url(&u.url),
+                _ => true,
+            });
+        });
         api::poll_replies();
         // Render Queue outputs written this frame (here or by a worker) → downloads.
         files::flush_downloads();
@@ -272,9 +291,56 @@ pub async fn start(canvas_id: String) -> Result<(), JsValue> {
             }),
         )
         .await?;
+    // 监听宿主语言切换（OTools 注入的 `otools-locale-changed` 事件）。
+    install_locale_listener();
     // Hide the loading message once the app runs.
     if let Some(el) = doc.get_element_by_id("loading") {
         el.remove();
     }
     Ok(())
+}
+
+/// 监听宿主语言切换（OTools 注入的 `otools-locale-changed` 事件），置位标志并请求重绘；
+/// 真正把 host locale 写进 interface_language 偏好发生在下一帧 `WebApp::logic`。
+fn install_locale_listener() {
+    let Some(window) = web_sys::window() else { return };
+    let closure = Closure::wrap(Box::new(|| {
+        NEEDS_LANG_SYNC.with(|f| f.set(true));
+        CTX.with(|c| {
+            if let Some(ctx) = c.borrow().as_ref() {
+                ctx.request_repaint();
+            }
+        });
+    }) as Box<dyn FnMut()>);
+    let _ = window.add_event_listener_with_callback(
+        "otools-locale-changed",
+        closure.as_ref().unchecked_ref::<js_sys::Function>(),
+    );
+    closure.forget();
+}
+
+/// 把宿主的 BCP 47 locale 映射到 EffectCraft 的界面语言代码（catalog 代码）。
+/// EffectCraft 的 catalog：`ja` / `zh-hans` / `zh-hant` / `uk` / `es` / `pt-br` / `ru` / `fr` /
+/// `de` / `cs`；其余回退英文。
+fn host_lang_code(host: &str) -> String {
+    let h = host.to_ascii_lowercase();
+    let mut parts = h.split(['-', '_']);
+    let primary = parts.next().unwrap_or_default().to_ascii_lowercase();
+    let rest: Vec<String> = parts.map(|p| p.to_ascii_lowercase()).collect();
+    let traditional = rest.iter().any(|p| p == "hant" || p == "tw" || p == "hk" || p == "mo");
+    match primary.as_str() {
+        "ja" => "ja",
+        "uk" => "uk",
+        "es" => "es",
+        "cs" => "cs",
+        "pt" => "pt-br",
+        "ru" => "ru",
+        "fr" => "fr",
+        "de" => "de",
+        "zh" => {
+            if traditional { "zh-hant" } else { "zh-hans" }
+        }
+        _ => "en",
+    }
+    .to_string()
 }
