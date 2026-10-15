@@ -2,7 +2,7 @@
   "devUrl": "http://127.0.0.1:6487",
   "developerName": "jry",
   "displayName": "EffectCraft",
-  "displayNameCN": "动效合成",
+  "displayNameCN": "EffectCraft",
   "entry": "dist/index.html",
   "quickDev": true,
   "hasAd": false,

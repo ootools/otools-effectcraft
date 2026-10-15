@@ -1,4 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <rect x="2" y="2" width="60" height="60" rx="14" fill="#2563eb"/>
-  <text x="32" y="44" font-family="Segoe UI Symbol, Apple Color Emoji, Noto Color Emoji, sans-serif" font-size="32" text-anchor="middle">✨</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="EffectCraft">
+  <defs>
+    <linearGradient id="bg-effectcraft" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ec4899"/>
+      <stop offset="100%" stop-color="#be185d"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#bg-effectcraft)"/>
+  <g fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M64 24 C68 50 78 60 104 64 C78 68 68 78 64 104 C60 78 50 68 24 64 C50 60 60 50 64 24 Z"/>
+  </g>
+  <g fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M98 26 C100 36 105 40 115 42 C105 44 100 48 98 58 C96 48 91 44 81 42 C91 40 96 36 98 26 Z"/>
+    <path d="M30 88 C31.5 96 35 100 45 102 C35 103.5 31.5 107 30 115 C28.5 107 25 103.5 15 102 C25 100 28.5 96 30 88 Z"/>
+  </g>
 </svg>
