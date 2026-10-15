@@ -11,10 +11,28 @@ index c6f315f..88015a1 100644
          cmd!("help.appPage", "EffectCraft Home Page", ["Help"], None, "{}", always, |s, _| open(s, links::APP_PAGE.into())),
          cmd!("help.github", "EffectCraft on GitHub", ["Help"], None, "{}", always, |s, _| open(s, links::GITHUB.into())),
 diff --git a/crates/ui-egui/src/header.rs b/crates/ui-egui/src/header.rs
-index fb381cf..b9be19f 100644
+index fb381cf..95c4afc 100644
 --- a/crates/ui-egui/src/header.rs
 +++ b/crates/ui-egui/src/header.rs
-@@ -184,20 +184,6 @@ pub fn show(app: &mut EffectcraftApp, ui: &mut egui::Ui, rect: Rect) {
+@@ -23,17 +23,6 @@ pub fn show(app: &mut EffectcraftApp, ui: &mut egui::Ui, rect: Rect) {
+     let cy = rect.center().y;
+     let mut x = rect.min.x + if app.integrated_titlebar && !app.ui.show_menu_bar { 80.0 } else { 10.0 };
+ 
+-    // Brand mark.
+-    let brand = Rect::from_min_size(pos2(x, cy - 12.0), vec2(24.0, 24.0));
+-    paint_logo(&p, brand);
+-    let bresp = ui.interact(brand, egui::Id::new("brand"), Sense::click());
+-    app.auto.add_response("header.about", &bresp, "About EffectCraft");
+-    widgets::focus_outline(ui, &bresp, &t);
+-    if bresp.on_hover_text(tr("About EffectCraft")).clicked() {
+-        app.dialog = Some(Dialog::About);
+-    }
+-    x += 32.0;
+-
+     // Home.
+     let home = Rect::from_min_size(pos2(x, cy - 13.0), vec2(26.0, 26.0));
+     let home_response = widgets::icon_button(ui, home, Icon::Home, app.ui.start_screen, &t, egui::Id::new("tool-home")).on_hover_text(tr("Home"));
+@@ -184,20 +173,6 @@ pub fn show(app: &mut EffectcraftApp, ui: &mut egui::Ui, rect: Rect) {
  
      // Right side: community buttons, workspaces.
      let mut rx = rect.max.x - 10.0;
