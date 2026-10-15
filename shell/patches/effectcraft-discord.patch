@@ -68,14 +68,25 @@ index d773fc4..117a715 100644
          (Icon::Sparkle, "EffectCraft home page", effectcraft_engine::links::APP_PAGE, "help.appPage"),
          (Icon::Code, "Source code on GitHub", effectcraft_engine::links::GITHUB, "help.github"),
 diff --git a/crates/ui-egui/src/panels/home.rs b/crates/ui-egui/src/panels/home.rs
-index 46bbb44..535a2e5 100644
+index 46bbb44..187bf9a 100644
 --- a/crates/ui-egui/src/panels/home.rs
 +++ b/crates/ui-egui/src/panels/home.rs
-@@ -272,7 +272,6 @@ fn rail_ui(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Painter, rail:
+@@ -270,9 +270,9 @@ fn rail_ui(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Painter, rail:
+         }
+         y += 38.0;
      }
++    /* 按产品要求暂时不显示社区链接与「More ArtCraft apps」入口（代码保留备查）。
      // Community links at the foot (below the pages when the window is short).
      let links = [
 -        (Icon::Chat, "Join the ArtCraft Discord", "help.discord"),
          (Icon::Globe, "getartcraft.com", "help.website"),
          (Icon::Globe, "EffectCraft home page", "help.appPage"),
          (Icon::Code, "EffectCraft on GitHub", "help.github"),
+@@ -315,6 +315,7 @@ fn rail_ui(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Painter, rail:
+             let _ = app.session.execute("help.sibling", json!({"app": slug}));
+         }
+     }
++    */
+ }
+ 
+ /// The Home page: the welcome, quick-start tiles and the recent projects table.
