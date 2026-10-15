@@ -1,0 +1,71 @@
+# EffectCraft 的 OTools 插件外壳。
+#
+# 上游 `apps/effectcraft-web` 是 lib crate（wasm-bindgen 导出 `start(canvas_id)`）：
+# 我们把它整层拷进 `shell/src/`（这层本来就是浏览器适配层，不是业务代码），
+# 再用自己的 `main.rs` 当 bin 跑起来；业务 crate（engine / ui-egui / media…）走 path 依赖。
+#
+# 上游源码在 `../upstream`（按 upstream.pin 的 commit 浅拉取，保持原样勿改）。
+[package]
+name = "otools-effectcraft-shell"
+description = "EffectCraft as an OTools plugin: the upstream egui UI compiled to WebAssembly"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+# 独立的 workspace：上游 `upstream/` 有自己的 workspace，本 crate 不能并进去
+# （它是 wasm-only 的，并进去会让宿主的 `cargo build` 也去编译 eframe/wgpu）。
+[workspace]
+
+[[bin]]
+name = "otools-effectcraft"
+path = "src/main.rs"
+
+[dependencies]
+effectcraft-engine = { path = "../upstream/crates/engine" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+effectcraft-host = { path = "../upstream/crates/host" }
+effectcraft-gpu = { path = "../upstream/crates/gpu" }
+effectcraft-media = { path = "../upstream/crates/media" }
+effectcraft-export = { path = "../upstream/crates/export" }
+effectcraft-expr = { path = "../upstream/crates/expr" }
+effectcraft-ui-egui = { path = "../upstream/crates/ui-egui" }
+egui = "0.36"
+eframe = { version = "0.36", features = ["default_fonts", "wgpu"] }
+log = "0.4"
+web-time = "1"
+base64 = "0.22"
+wasm-bindgen = "=0.2.129"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
+version = "0.3"
+features = [
+  "Blob",
+  "BlobPropertyBag",
+  "CssStyleDeclaration",
+  "Document",
+  "Element",
+  "DedicatedWorkerGlobalScope",
+  "Event",
+  "EventTarget",
+  "File",
+  "FileList",
+  "HtmlAnchorElement",
+  "HtmlCanvasElement",
+  "HtmlElement",
+  "HtmlInputElement",
+  "Location",
+  "Url",
+  "UrlSearchParams",
+  "Window",
+]
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 16

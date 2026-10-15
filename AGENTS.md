@@ -64,17 +64,26 @@
 - 不要在本仓库跑 `cargo build` 而不管 target：外壳是 wasm-only 的，
   宿主（x86_64）下 `main()` 只会打印一行提示，别把它当编译报错。
 
-## 状态：外壳尚未移植（2026-10-15）
+## 状态：外壳已移植（2026-10-15）
 
-仓库骨架（upstream.pin 机制、脚本、CI、元信息）已就绪，但 `shell/` 还没写。
+`shell/` 是**上游 `apps/effectcraft-web/src/` 的整层拷贝**加一个自己的 `main.rs`：
+那 11 个模块本来就是「宿主适配层」（files / persist / storage / browse / audio /
+diskcache / frames / worker / api / store），业务 crate（engine / ui-egui / media …）
+走 path 依赖。无头浏览器实测可启动（约 4s）。
 
-阻塞点：
+移植时做的三处改动：
 
-- `apps/effectcraft-web` 是 lib crate，上游走 `cargo xtask web`（wasm-bindgen CLI），
-  本身不用 trunk；`js/host.js` 以 `#[wasm_bindgen(module = "/js/host.js")]` 静态引入，
-  移植到 trunk 外壳时要把 host.js 放到 shell crate 根下。
-- 有真 Web Worker（`worker.rs` / `frames.rs`），worker 内按文件名拼
-  `new URL("effectcraft_web_bg.wasm", base)`；而 trunk 的 `filehash=true` 会给产物改名，
-  硬编码文件名会断 —— 要么关掉 hash，要么改 worker 启动代码。
-- 上游没有 `host_save` 这类现成钩子：保存与渲染队列导出目前只有 `<a download>`，
-  需要自己在 `files.rs` 那一层接宿主写盘。
+1. **`main.rs` 补 `pub use app::*;`**：上游这条在 `lib.rs` 里，其他模块是用
+   `crate::post` / `crate::repaint` / `crate::page_url` 引用它们的，少了就编译不过。
+2. **强制 `?noworkers`**（`index.html` 里重定向）：worker 内按文件名拼
+   `effectcraft_web_bg.wasm`，而 trunk 打开 `filehash` 后产物叫
+   `otools-effectcraft-<hash>_bg.wasm`，对不上。关掉后走上游的 `Frames::pump`
+   协作路径（UI 线程渲染），功能在、性能打折。
+3. **`files.rs::download()` 接宿主写盘**：在 OTools 里走 `otools::deliver`
+   （宿主另存对话框 + `writeHostFile`），不在宿主里才退回浏览器下载。
+
+**未移植**：打开素材仍走上游的 `<input type=file>`（没有接到宿主的打开对话框）；
+OPFS 不可用时 `persist` 会退到内存，功能正常但不持久化。
+
+**下一步值得做的**：把 `browse.rs` / `files.rs` 的导入路径换成宿主打开对话框，
+和另外几个 craft 插件保持一致。
