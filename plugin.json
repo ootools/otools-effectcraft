@@ -22,5 +22,5 @@
   "screenshots": [],
   "summary": "EffectCraft（开源、纯 Rust 重写的 Adobe After Effects 式合成）的 OTools 插件版：合成图层、关键帧、特效与渲染队列。",
   "uuid": "otools-effectcraft",
-  "version": "0.1.1"
+  "version": "0.1.2"
 }
