@@ -1,0 +1,274 @@
+diff --git a/crates/ui-egui/src/dock.rs b/crates/ui-egui/src/dock.rs
+index ae66eae..9d13225 100644
+--- a/crates/ui-egui/src/dock.rs
++++ b/crates/ui-egui/src/dock.rs
+@@ -131,6 +131,11 @@ impl PanelKind {
+             PanelKind::VrCompEditor => "VR Comp Editor",
+         }
+     }
++    /// 标签页上显示的名字：界面语言的译文，没有译文时是英文原文。
++    /// 只用于显示——`title()` 仍返回英文，`from_name` 与偏好里存的工作区名都按英文匹配。
++    pub fn display_title(self) -> &'static str {
++        crate::i18n::panel_label(self.title())
++    }
+     pub fn id(self) -> String {
+         format!("{self:?}")
+     }
+diff --git a/crates/ui-egui/src/dock_ui.rs b/crates/ui-egui/src/dock_ui.rs
+index a92d376..d8eab47 100644
+--- a/crates/ui-egui/src/dock_ui.rs
++++ b/crates/ui-egui/src/dock_ui.rs
+@@ -206,7 +206,7 @@ impl EffectcraftApp {
+         let titles = self.tab_titles();
+         let decos = self.tab_decos();
+         let docs = self.tab_docs();
+-        let title = |p: PanelKind| titles.iter().find(|(k, _)| *k == p).map(|(_, s)| s.clone()).unwrap_or_else(|| p.title().to_string());
++        let title = |p: PanelKind| titles.iter().find(|(k, _)| *k == p).map(|(_, s)| s.clone()).unwrap_or_else(|| p.display_title().to_string());
+         let info = dock::TabInfo { title: &title, decos: &decos, docs: &docs };
+         // Where each group's tabs are (tab drags show where a tab will land between them).
+         let mut tab_rects: Vec<(String, Vec<(PanelKind, Rect)>)> = vec![];
+@@ -570,7 +570,7 @@ impl EffectcraftApp {
+             }
+         }
+         // Ghost of the dragged tab.
+-        let g = painter.layout_no_wrap(p.title().to_string(), crate::theme::Tokens::ui(12.0), Color32::WHITE);
++        let g = painter.layout_no_wrap(p.display_title().to_string(), crate::theme::Tokens::ui(12.0), Color32::WHITE);
+         let gr = Rect::from_min_size(pos + vec2(12.0, 10.0), g.size() + vec2(16.0, 8.0));
+         painter.rect_filled(gr, 4.0, t.focus.gamma_multiply(0.85));
+         painter.galley(gr.min + vec2(8.0, 4.0), g, Color32::WHITE);
+diff --git a/crates/ui-egui/src/header.rs b/crates/ui-egui/src/header.rs
+index 95c4afc..c1ce3e2 100644
+--- a/crates/ui-egui/src/header.rs
++++ b/crates/ui-egui/src/header.rs
+@@ -234,7 +234,7 @@ pub fn show(app: &mut EffectcraftApp, ui: &mut egui::Ui, rect: Rect) {
+     if mresp.clicked() {
+         widgets::open_popup(ui, egui::Id::new("ws-pop"));
+     }
+-    let names: Vec<String> = crate::dock::WORKSPACES.iter().map(|s| s.to_string()).collect();
++    let names: Vec<String> = crate::dock::WORKSPACES.iter().map(|s| crate::i18n::panel_label(s).to_string()).collect();
+     if let Some(i) = widgets::popup_menu(
+         ui,
+         egui::Id::new("ws-pop"),
+@@ -249,7 +249,7 @@ pub fn show(app: &mut EffectcraftApp, ui: &mut egui::Ui, rect: Rect) {
+     // Small Screen, Standard.
+     let shown = ["Standard", "Small Screen", "Learn", "Review", "Default"];
+     for name in shown {
+-        let g = p.layout_no_wrap(name.to_string(), Tokens::ui(12.0), t.text);
++        let g = p.layout_no_wrap(crate::i18n::panel_label(name).to_string(), Tokens::ui(12.0), t.text);
+         let w = g.size().x + 16.0;
+         let r = Rect::from_min_max(pos2(rx - w, cy - 13.0), pos2(rx, cy + 13.0));
+         if r.min.x < x + 120.0 {
+@@ -616,7 +616,7 @@ fn puppet_options(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Painter
+ 
+ fn ws_menu(app: &mut EffectcraftApp, ui: &mut egui::Ui) {
+     for w in app.workspace_names() {
+-        if ui.selectable_label(app.ui.workspace == w, &w).clicked() {
++        if ui.selectable_label(app.ui.workspace == w, crate::i18n::panel_label_owned(&w)).clicked() {
+             app.set_workspace(&w);
+             ui.close();
+         }
+diff --git a/crates/ui-egui/src/i18n.rs b/crates/ui-egui/src/i18n.rs
+index 81343f9..49cdd48 100644
+--- a/crates/ui-egui/src/i18n.rs
++++ b/crates/ui-egui/src/i18n.rs
+@@ -9,7 +9,10 @@ use crate::EffectcraftApp;
+ pub(crate) mod effects;
+ /// Translations for the panels, tooltips and dialogs below the menu bar (see the module docs).
+ mod ui;
++/// 标签页标题与工作区名的译文（上游只译菜单与面板正文，这两个位置是裸英文）。
++mod labels;
+ use effectcraft_engine::menus::{MenuEntry, MenuNode};
++pub(crate) use labels::{panel_label, panel_label_owned};
+ pub(crate) use ui::{set_current, tr, tr_args};
+ 
+ /// Every language with a catalog, in the order Settings ▸ General ▸ Language lists them.
+diff --git a/crates/ui-egui/src/i18n/labels.rs b/crates/ui-egui/src/i18n/labels.rs
+new file mode 100644
+index 0000000..352c449
+--- /dev/null
++++ b/crates/ui-egui/src/i18n/labels.rs
+@@ -0,0 +1,171 @@
++//! 标签页标题与工作区名的翻译（OTools 移植层补）。
++//!
++//! 上游 `ui.rs` 的词典只覆盖菜单与面板正文：`dock.rs` 里 `PanelKind::title()` 与
++//! `dock::WORKSPACES` 是**裸英文字符串**，中文界面下标签页仍是 `Info` / `Audio` /
++//! `Standard` 这类英文（上游桌面版同样如此）。这里按当前界面语言补一张小表，
++//! 只用于「显示」，`title()` 仍返回英文原文——`PanelKind::from_name` 和偏好里存的
++//! 工作区名都按英文匹配，不能动。
++//!
++//! 查不到就返回英文，所以没装表、语言不支持时零影响。
++
++use super::ui::current;
++
++/// 简体中文。
++const SIMPLIFIED: &[(&str, &str)] = &[
++    // 工作区（Window ▸ Workspace）
++    ("Default", "默认"),
++    ("Standard", "标准"),
++    ("Small Screen", "小屏幕"),
++    ("Animation", "动画"),
++    ("Effects", "效果"),
++    ("Motion Tracking", "运动跟踪"),
++    ("Paint", "绘画"),
++    ("Text", "文本"),
++    ("Minimal", "精简"),
++    ("All Panels", "所有面板"),
++    ("Review", "审阅"),
++    ("Learn", "学习"),
++    ("Essential Graphics", "基本图形"),
++    ("Color", "颜色"),
++    ("Undocked Panels", "浮动面板"),
++    // 面板标签页
++    ("Project", "项目"),
++    ("Effect Controls", "效果控件"),
++    ("Composition", "合成"),
++    ("Layer", "图层"),
++    ("Timeline", "时间轴"),
++    ("Info", "信息"),
++    ("Audio", "音频"),
++    ("Preview", "预览"),
++    ("Effects & Presets", "效果和预设"),
++    ("Properties", "属性"),
++    ("Character", "字符"),
++    ("Paragraph", "段落"),
++    ("Align", "对齐"),
++    ("Tracker", "跟踪器"),
++    ("Wiggler", "摆动器"),
++    ("Smoother", "平滑器"),
++    ("Motion Sketch", "运动草图"),
++    ("Brushes", "画笔"),
++    ("Render Queue", "渲染队列"),
++    ("Flowchart", "流程图"),
++    ("History", "历史记录"),
++    ("Markers", "标记"),
++    ("Mask Interpolation", "蒙版插值"),
++    ("Script Console", "脚本控制台"),
++    ("ScriptUI Panel", "ScriptUI 面板"),
++    ("Lumetri Scopes", "Lumetri 示波器"),
++    ("Footage", "素材"),
++    ("Media Browser", "媒体浏览器"),
++    ("Metadata", "元数据"),
++    ("Progress", "进度"),
++    ("Content-Aware Fill", "内容识别填充"),
++    ("Create Nulls From Paths", "从路径创建空对象"),
++    ("VR Comp Editor", "VR 合成编辑器"),
++];
++
++/// 繁体中文。
++const TRADITIONAL: &[(&str, &str)] = &[
++    ("Default", "預設"),
++    ("Standard", "標準"),
++    ("Small Screen", "小螢幕"),
++    ("Animation", "動畫"),
++    ("Effects", "效果"),
++    ("Motion Tracking", "運動追蹤"),
++    ("Paint", "繪畫"),
++    ("Text", "文字"),
++    ("Minimal", "精簡"),
++    ("All Panels", "所有面板"),
++    ("Review", "審閱"),
++    ("Learn", "學習"),
++    ("Essential Graphics", "基本圖形"),
++    ("Color", "顏色"),
++    ("Undocked Panels", "浮動面板"),
++    ("Project", "專案"),
++    ("Effect Controls", "效果控制項"),
++    ("Composition", "合成"),
++    ("Layer", "圖層"),
++    ("Timeline", "時間軸"),
++    ("Info", "資訊"),
++    ("Audio", "音訊"),
++    ("Preview", "預覽"),
++    ("Effects & Presets", "效果與預設"),
++    ("Properties", "屬性"),
++    ("Character", "字元"),
++    ("Paragraph", "段落"),
++    ("Align", "對齊"),
++    ("Tracker", "追蹤器"),
++    ("Wiggler", "擺動器"),
++    ("Smoother", "平滑器"),
++    ("Motion Sketch", "運動草圖"),
++    ("Brushes", "筆刷"),
++    ("Render Queue", "算圖佇列"),
++    ("Flowchart", "流程圖"),
++    ("History", "歷史記錄"),
++    ("Markers", "標記"),
++    ("Mask Interpolation", "遮罩插值"),
++    ("Script Console", "指令碼主控台"),
++    ("ScriptUI Panel", "ScriptUI 面板"),
++    ("Lumetri Scopes", "Lumetri 示波器"),
++    ("Footage", "素材"),
++    ("Media Browser", "媒體瀏覽器"),
++    ("Metadata", "中繼資料"),
++    ("Progress", "進度"),
++    ("Content-Aware Fill", "內容感知填色"),
++    ("Create Nulls From Paths", "從路徑建立空物件"),
++    ("VR Comp Editor", "VR 合成編輯器"),
++];
++
++/// 界面语言下 `en` 的显示名；没有译文时原样返回。
++pub(crate) fn panel_label(en: &'static str) -> &'static str {
++    find(en).unwrap_or(en)
++}
++
++/// 同 [`panel_label`]，但接受任意借用字符串（工作区列表里还有用户自建的名字）：有译文时返回译文，
++/// 否则把原样复制成 `String`。
++pub(crate) fn panel_label_owned(en: &str) -> String {
++    find(en).map_or_else(|| en.to_string(), str::to_string)
++}
++
++/// 当前语言的表里 `en` 对应的译文。
++fn find(en: &str) -> Option<&'static str> {
++    let table = match current() {
++        "zh-hans" => SIMPLIFIED,
++        "zh-hant" => TRADITIONAL,
++        _ => return None,
++    };
++    table.iter().find(|(key, _)| *key == en).map(|(_, translated)| *translated)
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn both_catalogs_cover_the_same_labels() {
++        let mut hans: Vec<&str> = SIMPLIFIED.iter().map(|(k, _)| *k).collect();
++        let mut hant: Vec<&str> = TRADITIONAL.iter().map(|(k, _)| *k).collect();
++        hans.sort_unstable();
++        hant.sort_unstable();
++        assert_eq!(hans, hant, "简繁两张表必须覆盖同一批英文键");
++    }
++
++    #[test]
++    fn every_workspace_and_panel_has_a_label() {
++        for w in crate::dock::WORKSPACES {
++            assert!(SIMPLIFIED.iter().any(|(k, _)| k == w), "工作区缺少译文：{w}");
++        }
++        for p in crate::dock::PanelKind::ALL {
++            assert!(SIMPLIFIED.iter().any(|(k, _)| *k == p.title()), "面板缺少译文：{}", p.title());
++        }
++    }
++
++    #[test]
++    fn unknown_language_keeps_english() {
++        super::ui::set_current("en");
++        assert_eq!(panel_label("Info"), "Info");
++        super::ui::set_current("zh-hans");
++        assert_eq!(panel_label("Info"), "信息");
++        super::ui::set_current("en");
++    }
++}
+diff --git a/crates/ui-egui/src/panels/mod.rs b/crates/ui-egui/src/panels/mod.rs
+index 1b6ef8c..544980d 100644
+--- a/crates/ui-egui/src/panels/mod.rs
++++ b/crates/ui-egui/src/panels/mod.rs
+@@ -240,7 +240,7 @@ pub fn panel_menu_popup(app: &mut EffectcraftApp, ui: &mut egui::Ui) {
+                     }
+                 }
+                 _ => {
+-                    ui.label(egui::RichText::new(panel.title()).weak());
++                    ui.label(egui::RichText::new(panel.display_title()).weak());
+                 }
+             }
+         });
