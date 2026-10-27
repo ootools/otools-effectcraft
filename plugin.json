@@ -22,5 +22,56 @@
   "screenshots": [],
   "summary": "EffectCraft（开源、纯 Rust 重写的 Adobe After Effects 式合成）的 OTools 插件版：合成图层、关键帧、特效与渲染队列。",
   "uuid": "otools-effectcraft",
-  "version": "0.1.4"
+  "version": "0.2.0",
+  "native": {
+    "enabled": true
+  },
+  "mcp": {
+    "enabled": true,
+    "backend": "headless",
+    "namespace": "effectcraft",
+    "expose": [
+      "list_commands",
+      "describe_command",
+      "execute_command",
+      "run_script",
+      "get_project",
+      "get_comp",
+      "get_layer",
+      "get_property",
+      "set_property",
+      "add_keyframe",
+      "add_effect",
+      "list_effects",
+      "list_fonts",
+      "get_state",
+      "render_frame",
+      "open_project",
+      "save_project",
+      "undo",
+      "redo",
+      "history",
+      "script_ui",
+      "screenshot",
+      "ui_inspect",
+      "ui_elements",
+      "ui_click",
+      "ui_drag",
+      "ui_key",
+      "ui_type",
+      "ui_set",
+      "control",
+      "batch",
+      "command_list",
+      "command_run",
+      "render_preview",
+      "command_batch",
+      "doc_inspect"
+    ],
+    "resources": [
+      "effectcraft://document",
+      "effectcraft://commands"
+    ]
+  },
+  "minOToolsVersion": "0.8.6"
 }
