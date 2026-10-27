@@ -70,7 +70,8 @@ features = [
 # （`DecodeLimits`），少了这一段会退回 crates.io 的未打补丁版本。
 # 上游更新后要同步这里。
 [patch.crates-io]
-hayro-syntax = { git = "https://github.com/storytold/craft-libs", rev = "ca50d63b773c99f96e75c77ce5a1d21e7c9cda0d", version = "=0.7.2" }
+hayro-syntax = { git = "https://github.com/storytold/craft-libs", rev = "9f75d3dc19b4b514c4f3d4847ed1ec1b0e86b4ef", version = "=0.7.2" }
+hayro-jbig2 = { git = "https://github.com/storytold/craft-libs", rev = "9f75d3dc19b4b514c4f3d4847ed1ec1b0e86b4ef", version = "=0.3.0" }
 
 [profile.release]
 opt-level = 3

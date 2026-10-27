@@ -11,7 +11,7 @@ index c6f315f..88015a1 100644
          cmd!("help.appPage", "EffectCraft Home Page", ["Help"], None, "{}", always, |s, _| open(s, links::APP_PAGE.into())),
          cmd!("help.github", "EffectCraft on GitHub", ["Help"], None, "{}", always, |s, _| open(s, links::GITHUB.into())),
 diff --git a/crates/ui-egui/src/header.rs b/crates/ui-egui/src/header.rs
-index fb381cf..95c4afc 100644
+index c1272c4..e96d5cd 100644
 --- a/crates/ui-egui/src/header.rs
 +++ b/crates/ui-egui/src/header.rs
 @@ -23,17 +23,6 @@ pub fn show(app: &mut EffectcraftApp, ui: &mut egui::Ui, rect: Rect) {
@@ -54,10 +54,10 @@ index fb381cf..95c4afc 100644
          [("hdr-github", Icon::Code, "EffectCraft on GitHub", "help.github"), ("hdr-web", Icon::Globe, "EffectCraft on getartcraft.com", "help.appPage")]
      {
 diff --git a/crates/ui-egui/src/panels/dialogs.rs b/crates/ui-egui/src/panels/dialogs.rs
-index d773fc4..117a715 100644
+index 07b257e..3041ee2 100644
 --- a/crates/ui-egui/src/panels/dialogs.rs
 +++ b/crates/ui-egui/src/panels/dialogs.rs
-@@ -338,8 +338,7 @@ fn about_main(app: &mut EffectcraftApp, ui: &mut egui::Ui, t: &Tokens, cmd: &mut
+@@ -341,8 +341,7 @@ fn about_main(app: &mut EffectcraftApp, ui: &mut egui::Ui, t: &Tokens, cmd: &mut
      ui.add_space(12.0);
      ui.label(tr("A clean-room, open-source compositor for motion graphics and visual effects: native on macOS, Windows and Linux, and in the browser. Part of the ArtCraft family of creative apps."));
      ui.add_space(14.0);
@@ -68,10 +68,10 @@ index d773fc4..117a715 100644
          (Icon::Sparkle, "EffectCraft home page", effectcraft_engine::links::APP_PAGE, "help.appPage"),
          (Icon::Code, "Source code on GitHub", effectcraft_engine::links::GITHUB, "help.github"),
 diff --git a/crates/ui-egui/src/panels/home.rs b/crates/ui-egui/src/panels/home.rs
-index 46bbb44..187bf9a 100644
+index fcfd017..19bd0ae 100644
 --- a/crates/ui-egui/src/panels/home.rs
 +++ b/crates/ui-egui/src/panels/home.rs
-@@ -270,9 +270,9 @@ fn rail_ui(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Painter, rail:
+@@ -283,9 +283,9 @@ fn rail_ui(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Painter, rail:
          }
          y += 38.0;
      }
@@ -82,7 +82,7 @@ index 46bbb44..187bf9a 100644
          (Icon::Globe, "getartcraft.com", "help.website"),
          (Icon::Globe, "EffectCraft home page", "help.appPage"),
          (Icon::Code, "EffectCraft on GitHub", "help.github"),
-@@ -315,6 +315,7 @@ fn rail_ui(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Painter, rail:
+@@ -328,6 +328,7 @@ fn rail_ui(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Painter, rail:
              let _ = app.session.execute("help.sibling", json!({"app": slug}));
          }
      }
@@ -91,7 +91,7 @@ index 46bbb44..187bf9a 100644
  
  /// The Home page: the welcome, quick-start tiles and the recent projects table.
 diff --git a/crates/ui-egui/src/theme.rs b/crates/ui-egui/src/theme.rs
-index f5a0664..f89e8c5 100644
+index 932b092..9f83add 100644
 --- a/crates/ui-egui/src/theme.rs
 +++ b/crates/ui-egui/src/theme.rs
 @@ -7,6 +7,15 @@
