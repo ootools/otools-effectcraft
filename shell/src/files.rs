@@ -48,14 +48,14 @@ pub fn list() -> Vec<(String, usize)> {
 
 /// The next write of `path` goes to browser storage only (no download).
 pub fn save_quietly(path: &str) {
-    QUIET.lock().unwrap_or_else(|e| e.into_inner()).push(path.to_string());
+    QUIET.lock().unwrap_or_else(std::sync::PoisonError::into_inner).push(path.to_string());
 }
 
 /// A rendered file (from the page's exporter or a worker): kept in the table unpersisted and
 /// downloaded at the next [`flush_downloads`].
 pub fn add_output(path: &str, data: Arc<[u8]>) {
     STORE.put_file(path, data, false);
-    OUTPUTS.lock().unwrap_or_else(|e| e.into_inner()).push(path.to_string());
+    OUTPUTS.lock().unwrap_or_else(std::sync::PoisonError::into_inner).push(path.to_string());
 }
 
 /// The table path for a picked/dropped file name.
@@ -83,14 +83,7 @@ fn mime(name: &str) -> &'static str {
 }
 
 /// Offer `data` as a download named `name`.
-///
-/// 移植改动：在 OTools 宿主里改成「弹宿主的另存对话框 + 写盘」，
-/// 不在宿主里（把 dist 拖进普通浏览器）才走上游的浏览器下载。
 pub fn download(name: &str, data: &[u8]) -> Result<(), JsValue> {
-    if crate::otools::available() {
-        crate::otools::deliver(name, data);
-        return Ok(());
-    }
     let doc = web_sys::window().and_then(|w| w.document()).ok_or("no document")?;
     let parts = js_sys::Array::of1(&js_sys::Uint8Array::from(data));
     let bag = web_sys::BlobPropertyBag::new();
@@ -127,7 +120,7 @@ impl Services for WebServices {
     fn write_file(&self, path: &str, data: &[u8]) -> std::io::Result<()> {
         put(path, data.into());
         let quiet = {
-            let mut q = QUIET.lock().unwrap_or_else(|e| e.into_inner());
+            let mut q = QUIET.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             let n = q.len();
             q.retain(|p| p != path);
             q.len() != n
@@ -151,8 +144,16 @@ impl Services for WebServices {
         let dir = dir.trim_end_matches('/');
         list().into_iter().map(|(p, _)| p).filter(|p| p.rsplit_once('/').is_some_and(|(d, _)| d == dir)).collect()
     }
+    /// The table's files (the default asks `std::fs`, which has no files on wasm32).
+    fn exists(&self, path: &str) -> bool {
+        get(path).is_some()
+    }
     fn is_dir(&self, _path: &str) -> bool {
         false
+    }
+    /// The table's keys are the paths themselves.
+    fn full_path(&self, path: &str) -> Option<String> {
+        Some(path.to_string())
     }
 }
 
@@ -187,7 +188,7 @@ pub fn export_sink() -> Arc<effectcraft_export::Sink> {
 
 /// Download the render outputs written since the last call.
 pub fn flush_downloads() {
-    let paths = std::mem::take(&mut *OUTPUTS.lock().unwrap_or_else(|e| e.into_inner()));
+    let paths = std::mem::take(&mut *OUTPUTS.lock().unwrap_or_else(std::sync::PoisonError::into_inner));
     let mut out: Vec<(String, Arc<[u8]>)> = paths.into_iter().filter_map(|p| get(&p).map(|d| (file_name(&p).to_string(), d))).collect();
     out.sort_by(|a, b| a.0.cmp(&b.0));
     out.dedup_by(|a, b| a.0 == b.0);

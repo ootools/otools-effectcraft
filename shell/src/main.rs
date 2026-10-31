@@ -19,6 +19,8 @@ mod audio;
 #[cfg(target_arch = "wasm32")]
 mod browse;
 #[cfg(target_arch = "wasm32")]
+mod config_file;
+#[cfg(target_arch = "wasm32")]
 mod diskcache;
 #[cfg(target_arch = "wasm32")]
 mod files;
@@ -28,6 +30,8 @@ mod frames;
 mod otools;
 #[cfg(target_arch = "wasm32")]
 mod persist;
+#[cfg(target_arch = "wasm32")]
+mod startup;
 #[cfg(target_arch = "wasm32")]
 mod storage;
 #[cfg(target_arch = "wasm32")]

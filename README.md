@@ -71,10 +71,9 @@ node scripts/smoke-mcp.mjs ..          # 参数是各 craft 仓库的共同父�
 上游自带 10 种语言的词典（菜单与面板正文），插件启动时把宿主的界面语言写进
 `prefs.general.language`，运行中切换也会跟上。
 
-上游词典**没覆盖**两处裸英文：面板标签页标题（`PanelKind::title()`）与工作区名
-（`dock::WORKSPACES`），所以中文界面下标签页会显示 `Info` / `Audio` / `Standard`。
-`shell/patches/effectcraft-i18n.patch` 补了这张小表（简繁中文，查不到回落英文），
-只影响显示——`title()` 仍返回英文，`from_name` 与偏好里存的工作区名都按英文匹配。
+上游 0.19 起把面板标签页标题与工作区名的翻译并进了标准 command 词典
+（`window.panel` / `window.workspace`），之前由 `effectcraft-i18n.patch` 提供的
+小表已随之删除——该补丁 0.19 起不再需要。
 
 ## 构建
 
@@ -84,6 +83,6 @@ node scripts/fetch-upstream.mjs     # 拉取 pinned 的上游到 upstream/
 node scripts/build-wasm.mjs         # trunk build --release → dist/
 ```
 
-需要 rustc >= 1.95 与 wasm32-unknown-unknown 目标（egui 0.36 的要求）。
+需要 rustc >= 1.95 与 wasm32-unknown-unknown 目标（egui 0.37 的要求）。
 
 详细约定见 [AGENTS.md](./AGENTS.md)。

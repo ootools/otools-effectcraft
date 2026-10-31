@@ -1,22 +1,23 @@
 //! The app: startup (storage, session restore, hooks), the eframe app and the page glue.
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use effectcraft_engine::Session;
 
-use crate::{api, audio, browse, diskcache, files, frames, persist, storage, worker};
+use crate::startup::Startup;
+use crate::{api, audio, browse, config_file, diskcache, files, frames, persist, storage, worker};
 use effectcraft_ui_egui::EffectcraftApp;
 use serde_json::json;
-use wasm_bindgen::closure::Closure;
-use wasm_bindgen::JsCast as _;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(module = "/js/host.js")]
 extern "C" {
     #[wasm_bindgen(js_name = showDeviceLost)]
     fn show_device_lost(message: &str, kept: bool);
+    #[wasm_bindgen(js_name = installCanvasShortcuts)]
+    fn install_canvas_shortcuts(canvas: &web_sys::HtmlCanvasElement);
 }
 
 /// Work for the UI thread with access to the app (posted by async tasks: picked files…).
@@ -43,8 +44,6 @@ pub fn page_url(rel: &str) -> String {
 thread_local! {
     static ACTIONS: RefCell<Vec<Action>> = const { RefCell::new(Vec::new()) };
     static CTX: RefCell<Option<egui::Context>> = const { RefCell::new(None) };
-    /// 宿主语言切换后，下一帧把 host locale 写进 interface_language 偏好并重渲染。
-    static NEEDS_LANG_SYNC: Cell<bool> = const { Cell::new(true) };
 }
 
 /// Run `f` on the UI thread at the next frame.
@@ -85,50 +84,53 @@ pub(crate) fn open_or_import(app: &mut EffectcraftApp, paths: Vec<String>) {
 /// The eframe app: the shared EffectCraft UI plus the browser host's per-frame duties.
 pub struct WebApp {
     pub app: EffectcraftApp,
-    /// Keep the session snapshot (off with `?empty`).
+    /// Keep the session snapshot (off with `?empty`; off with an explicit `"demo"` startup until
+    /// the user's own work begins, see `demo_start`).
     pub persist: bool,
+    /// Started on the demo by the config: the snapshot stays off, so the demo never replaces the
+    /// last visit's project, until the user opens a project from a file or edits the demo.
+    pub demo_start: bool,
 }
 
 impl eframe::App for WebApp {
+    /// Take dropped files out of `raw_input` before eframe can replay them on a hidden tab, read them asynchronously
+    /// through `open_or_import`, then run the shared app's input hook.
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        // Files dropped on the page are input: read them here, where the browser's drop event is
+        // still the current pass's, not from a later (possibly logic-only) tick.
+        //
+        // The list is *taken* out of the raw input: a hidden tab runs `logic` and eframe appends
+        // the same prepared raw input back for the next pass, so leaving the files there would
+        // import them again on every hidden logic tick.
+        let dropped_files = std::mem::take(&mut raw_input.dropped_files);
+        let dropped: Vec<web_sys::File> = dropped_files.iter().filter_map(|f| f.web_file().cloned()).collect();
+        if !dropped.is_empty() {
+            files::read_files(dropped, |paths| post(move |app| open_or_import(app, paths)));
+        }
         self.app.raw_input_hook(ctx, raw_input);
     }
 
+    /// The browser host's logic tick: run queued UI actions, tick the shared app, poll API replies, flush Render
+    /// Queue downloads, persist the session snapshot when enabled, publish GPU/frame-worker/disk-cache info and close
+    /// the IME pass.
     fn logic(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        // 宿主投递的「打开方式」：先登记字节并排队动作，下面同一帧就会执行
-        // （与「文件 ▸ 打开」、拖放同一条路）。
-        crate::otools::drain_delivered();
         let actions = ACTIONS.with(|a| std::mem::take(&mut *a.borrow_mut()));
         for f in actions {
             f(&mut self.app);
         }
-        // 跟随宿主语言：切换后下一帧把 host locale 写进 interface_language 偏好（重渲染）。
-        if NEEDS_LANG_SYNC.with(|f| f.replace(false)) {
-            let code = host_lang_code(&crate::otools::host_language());
-            if self.app.session.prefs.general.language != code {
-                self.app.session.prefs.general.language = code;
-            }
-        }
-        // Files dropped on the page: read them, then open/import.
-        let dropped: Vec<web_sys::File> = ctx.input(|i| i.raw.dropped_files.iter().filter_map(|f| f.web_file().cloned()).collect());
-        if !dropped.is_empty() {
-            files::read_files(dropped, |paths| post(move |app| open_or_import(app, paths)));
-        }
-        self.app.logic(ctx, frame);
-        // 让插件更纯粹：吞掉所有社区/外部链接（Discord、ArtCraft 官网、上游 GitHub），
-        // 点击不再跳出插件。文档内普通链接不受影响。
-        ctx.output_mut(|o| {
-            o.commands.retain(|c| match c {
-                egui::OutputCommand::OpenUrl(u) => !crate::otools::is_community_url(&u.url),
-                _ => true,
-            });
-        });
+        self.app.tick(ctx, frame);
         api::poll_replies();
         // Render Queue outputs written this frame (here or by a worker) → downloads.
         files::flush_downloads();
+        // The user's own work after a demo start is worth keeping too: turn the snapshot on.
+        if self.demo_start && (self.app.session.path.is_some() || self.app.session.is_dirty()) {
+            self.demo_start = false;
+            self.persist = true;
+        }
         // What a reload comes back to.
         if self.persist {
-            persist::snapshot(&self.app.session, ctx.input(|i| i.time), 1.0);
+            // The app's monotonic clock: `ctx.input(|i| i.time)` is stale in a logic-only tick.
+            persist::snapshot(&self.app.session, self.app.now(), 1.0);
         }
         api::set_info("gpu", json!({"compositor": self.app.gpu_adapter(), "viewerOnGpu": self.app.viewer_on_gpu()}));
         api::set_info("frameWorkers", frames::stats());
@@ -136,6 +138,7 @@ impl eframe::App for WebApp {
         let d = &self.app.session.prefs.disk;
         diskcache::configure(d.disk_cache_enabled, d.disk_cache_max_gb, storage::quota());
         api::set_info("diskCache", diskcache::stats());
+        self.app.finish_ime_logic(ctx);
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
@@ -206,13 +209,21 @@ fn install_hooks(app: &mut EffectcraftApp) {
 #[wasm_bindgen]
 pub async fn start(canvas_id: String) -> Result<(), JsValue> {
     eframe::WebLogger::init(log::LevelFilter::Info).ok();
+    // Match System follows `?lang=` in the address, then the browser's languages; a language
+    // chosen in Settings still wins.
+    let navigator = web_sys::window().map(|w| w.navigator());
+    let browser = navigator.iter().flat_map(|n| n.languages().iter().filter_map(|v| v.as_string()).collect::<Vec<_>>());
+    effectcraft_ui_egui::i18n::set_system_locales(query_value("lang"), browser.collect());
     let doc = web_sys::window().and_then(|w| w.document()).ok_or("no document")?;
     let canvas: web_sys::HtmlCanvasElement = doc.get_element_by_id(&canvas_id).ok_or("no canvas")?.dyn_into()?;
+    install_canvas_shortcuts(&canvas);
     let empty = query_flag("empty");
     let home = query_flag("home");
     // Browser storage: settings, recent projects, imported media, saved projects, auto-saves and
     // the last session come back.
-    let t0 = js_sys::Date::now();
+    // Monotonic (performance.now) rather than the wall clock: a system-time jump must not turn
+    // the storage-load report negative or huge.
+    let t0 = web_time::Instant::now();
     let stored = match persist::load(&query_value("storage").unwrap_or_default()).await {
         Ok(n) => n,
         Err(e) => {
@@ -220,23 +231,23 @@ pub async fn start(canvas_id: String) -> Result<(), JsValue> {
             0
         }
     };
-    api::set_info("storage", json!({"backend": persist::backend(), "entries": stored, "loadMs": js_sys::Date::now() - t0}));
+    api::set_info("storage", json!({"backend": persist::backend(), "entries": stored, "loadMs": t0.elapsed().as_secs_f64() * 1000.0}));
     audio::install_unlock();
+    // `./effectcraft-config.json`: what to open on load.
+    // `?empty` and `?demo` decide by themselves, so they skip the request.
+    let startup = if empty || query_flag("demo") { Startup::default() } else { config_file::startup().await };
+    // An explicit `"demo"` start leaves the saved session alone until the user opens or edits something.
+    let keep_session = !empty && startup.keeps_session();
     browse::restore();
     diskcache::init();
     storage::refresh();
-    // macOS WKWebView（WebKit）里 WebGPU 设备获取经常静默失败，导致画布全白、且无报错。
-    // 强制走 WebGL2 后端（与 filmcraft 已验证可用的路径一致），eframe 在 WebGL2 下正常渲染。
-    let mut options = eframe::WebOptions::default();
-    if let eframe::egui_wgpu::WgpuSetup::CreateNew(create) = &mut options.wgpu_options.wgpu_setup {
-        create.instance_descriptor.backends = eframe::wgpu::Backends::GL;
-    }
     let runner = eframe::WebRunner::new();
     runner
         .start(
             canvas,
-            options,
+            eframe::WebOptions::default(),
             Box::new(move |cc| {
+                EffectcraftApp::install_ime_reset_hooks(&cc.egui_ctx);
                 CTX.with(|c| *c.borrow_mut() = Some(cc.egui_ctx.clone()));
                 // The page owns this shared presentation device; worker devices retain their
                 // separate owned-device handlers. No browser error-scope future is blocked on.
@@ -252,7 +263,7 @@ pub async fn start(canvas_id: String) -> Result<(), JsValue> {
                     // The canvas can't present any more (#225): the page says so over it and
                     // offers a reload, which brings the session back when browser storage keeps it.
                     let lost = gpu_failures.clone();
-                    let kept = !empty && persist::backend() != "memory";
+                    let kept = keep_session && persist::backend() != "memory";
                     rs.device.set_device_lost_callback(move |reason, message| {
                         let message = format!("GPU device lost ({reason:?}): {message}");
                         lost.report(&message, true);
@@ -261,22 +272,20 @@ pub async fn start(canvas_id: String) -> Result<(), JsValue> {
                 }
                 let mut session = session();
                 session.load_settings();
+                // Scripts in Scripts/Startup run before a project opens.
+                let _ = session.execute("file.runStartupScripts", json!({}));
                 let recovery = session.begin_recovery();
-                // `?empty`: a blank project; `?demo`: the demo project; otherwise the last visit's
-                // project (the demo on a first visit).
-                let restored = !empty && !query_flag("demo") && persist::restore(&mut session);
-                if !restored && !empty {
+                // `?empty`: a blank project; `?demo`: the demo project; otherwise what the config's
+                // `startup` says (default: the last visit's project, the demo on a first visit).
+                let demo = query_flag("demo");
+                let restored = !empty && !demo && startup.restores() && persist::restore(&mut session);
+                if !restored && !empty && (demo || startup.demo_when_nothing_restored()) {
                     let _ = session.execute("file.openDemoProject", json!({}));
                 }
                 api::set_info("restored", json!(restored));
                 // The ScriptUI panels open on the last visit open again.
                 let _ = session.execute("window.restoreScriptPanels", json!({}));
                 let mut app = EffectcraftApp::new(session);
-                // wasm 读不到系统字体：内嵌 CJK + 阿拉伯 fallback，否则中文/日文/阿拉伯文方框。
-                effectcraft_ui_egui::theme::set_extra_fallback_fonts(vec![
-                    ("otools-cjk".into(), std::sync::Arc::new(eframe::egui::FontData::from_static(include_bytes!("../assets/fonts/otools-cjk-subset.ttf")))),
-                    ("otools-arabic".into(), std::sync::Arc::new(eframe::egui::FontData::from_static(include_bytes!("../assets/fonts/otools-arabic-subset.ttf")))),
-                ]);
                 app.set_gpu_failure_bridge(gpu_failures);
                 app.ui.start_screen = home;
                 if let Some(r) = recovery.filter(|r| !restored && r.autosave.is_some()) {
@@ -290,70 +299,19 @@ pub async fn start(canvas_id: String) -> Result<(), JsValue> {
                 if n > 0 {
                     app.frames.set_remote(Some(Arc::new(frames::WebFrames::start(n, !query_flag("nogpuworkers")))));
                 }
+                app.frames.set_virtual_media(files::STORE.media_epoch(), Arc::new(|path| files::STORE.file_identity(path)));
                 let (tx, rx) = std::sync::mpsc::channel();
                 api::set_sender(tx);
                 app = app.with_control(rx);
                 let backend = cc.wgpu_render_state.as_ref().map(|rs| format!("{:?}", rs.adapter.get_info().backend));
                 api::set_info("backend", json!(backend));
-                Ok(Box::new(WebApp { app, persist: !empty }))
+                Ok(Box::new(WebApp { app, persist: keep_session, demo_start: !empty && !keep_session }))
             }),
         )
         .await?;
-    // 监听宿主语言切换（OTools 注入的 `otools-locale-changed` 事件）。
-    install_locale_listener();
     // Hide the loading message once the app runs.
     if let Some(el) = doc.get_element_by_id("loading") {
         el.remove();
     }
     Ok(())
-}
-
-/// 监听宿主语言切换（OTools 注入的 `otools-locale-changed` 事件），置位标志并请求重绘；
-/// 真正把 host locale 写进 interface_language 偏好发生在下一帧 `WebApp::logic`。
-fn install_locale_listener() {
-    let Some(window) = web_sys::window() else { return };
-    let closure = Closure::wrap(Box::new(|| {
-        NEEDS_LANG_SYNC.with(|f| f.set(true));
-        CTX.with(|c| {
-            if let Some(ctx) = c.borrow().as_ref() {
-                ctx.request_repaint();
-            }
-        });
-    }) as Box<dyn FnMut()>);
-    let _ = window.add_event_listener_with_callback(
-        "otools-locale-changed",
-        closure.as_ref().unchecked_ref::<js_sys::Function>(),
-    );
-    // 宿主投递了文件：同一份「置位 + 请求重绘」逻辑，让下一帧的 logic 去取件。
-    let _ = window.add_event_listener_with_callback(
-        "otools-open-files-arrived",
-        closure.as_ref().unchecked_ref::<js_sys::Function>(),
-    );
-    closure.forget();
-}
-
-/// 把宿主的 BCP 47 locale 映射到 EffectCraft 的界面语言代码（catalog 代码）。
-/// EffectCraft 的 catalog：`ja` / `zh-hans` / `zh-hant` / `uk` / `es` / `pt-br` / `ru` / `fr` /
-/// `de` / `cs`；其余回退英文。
-fn host_lang_code(host: &str) -> String {
-    let h = host.to_ascii_lowercase();
-    let mut parts = h.split(['-', '_']);
-    let primary = parts.next().unwrap_or_default().to_ascii_lowercase();
-    let rest: Vec<String> = parts.map(|p| p.to_ascii_lowercase()).collect();
-    let traditional = rest.iter().any(|p| p == "hant" || p == "tw" || p == "hk" || p == "mo");
-    match primary.as_str() {
-        "ja" => "ja",
-        "uk" => "uk",
-        "es" => "es",
-        "cs" => "cs",
-        "pt" => "pt-br",
-        "ru" => "ru",
-        "fr" => "fr",
-        "de" => "de",
-        "zh" => {
-            if traditional { "zh-hant" } else { "zh-hans" }
-        }
-        _ => "en",
-    }
-    .to_string()
 }
