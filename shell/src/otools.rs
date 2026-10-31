@@ -24,6 +24,10 @@ extern "C" {
     /// `{name, dataBase64, forcePick}` → `{path}` 或 `null`（用户取消）。
     #[wasm_bindgen(js_namespace = effectcraftOtools, js_name = "saveFile")]
     fn host_save_file(request: JsValue) -> js_sys::Promise;
+
+    /// 宿主投递的「打开方式」：JS 侧已把文件读成字节攒好，这里一次取走。
+    #[wasm_bindgen(js_namespace = effectcraftOtools, js_name = "takeDelivered")]
+    fn take_delivered_raw() -> js_sys::Array;
 }
 
 /// 宿主是否可用（不在 OTools 里时退回上游的浏览器下载）。
@@ -40,6 +44,33 @@ pub fn host_language() -> String {
 /// 会把用户拽到外部，让插件不纯粹。语言切换监听与链接屏蔽用到它。
 pub fn is_community_url(url: &str) -> bool {
     url.contains("discord.gg") || url.contains("getartcraft.com") || url.contains("github.com/storytold")
+}
+
+/// 取走宿主投递的文件：先登记进虚拟文件表，再排队一次「打开或导入」。
+///
+/// 上游 `file.open` / `file.import` 只认虚拟表路径（`files::get`），所以宿主给的
+/// 真实路径要先 `put` 成 `/<name>` 再交给命令——与拖放、菜单打开完全同一条路
+/// （`.ecproj` 打开工程，其余当素材导入）。
+pub fn drain_delivered() {
+    let mut paths = Vec::new();
+    for item in take_delivered_raw().iter() {
+        if !item.is_object() {
+            continue;
+        }
+        let name = field(&item, "name").unwrap_or_else(|| "untitled".to_string());
+        let data = field(&item, "dataBase64").unwrap_or_default();
+        match base64::engine::general_purpose::STANDARD.decode(data) {
+            Ok(bytes) => {
+                let path = crate::files::path_for(&name);
+                crate::files::put(&path, bytes.into());
+                paths.push(path);
+            }
+            Err(e) => log::error!("delivered file {name} is not valid base64: {e}"),
+        }
+    }
+    if !paths.is_empty() {
+        crate::app::post(move |app| crate::app::open_or_import(app, paths));
+    }
 }
 
 /// 把字节交给宿主写盘。异步进行：调用方（同步的 `download`）立刻返回。
@@ -70,6 +101,10 @@ async fn save_file(request: &JsValue) -> Result<Option<String>, String> {
     }
     let path = js_sys::Reflect::get(&value, &JsValue::from_str("path")).map_err(|_| "宿主没有返回路径".to_string())?;
     Ok(path.as_string())
+}
+
+fn field(value: &JsValue, key: &str) -> Option<String> {
+    js_sys::Reflect::get(value, &JsValue::from_str(key)).ok()?.as_string()
 }
 
 fn js_error(e: JsValue) -> String {

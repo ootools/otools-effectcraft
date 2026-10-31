@@ -4,6 +4,9 @@
   "displayName": "EffectCraft",
   "displayNameCN": "EffectCraft",
   "entry": "dist/index.html",
+  "fileAssociations": [
+    { "ext": "ecproj", "desc": "EffectCraft 工程", "mime": "application/json" }
+  ],
   "quickDev": true,
   "hasAd": false,
   "icon": "✨",

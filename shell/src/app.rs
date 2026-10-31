@@ -95,6 +95,9 @@ impl eframe::App for WebApp {
     }
 
     fn logic(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        // 宿主投递的「打开方式」：先登记字节并排队动作，下面同一帧就会执行
+        // （与「文件 ▸ 打开」、拖放同一条路）。
+        crate::otools::drain_delivered();
         let actions = ACTIONS.with(|a| std::mem::take(&mut *a.borrow_mut()));
         for f in actions {
             f(&mut self.app);
@@ -319,6 +322,11 @@ fn install_locale_listener() {
     }) as Box<dyn FnMut()>);
     let _ = window.add_event_listener_with_callback(
         "otools-locale-changed",
+        closure.as_ref().unchecked_ref::<js_sys::Function>(),
+    );
+    // 宿主投递了文件：同一份「置位 + 请求重绘」逻辑，让下一帧的 logic 去取件。
+    let _ = window.add_event_listener_with_callback(
+        "otools-open-files-arrived",
         closure.as_ref().unchecked_ref::<js_sys::Function>(),
     );
     closure.forget();
