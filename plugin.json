@@ -76,5 +76,6 @@
       "effectcraft://commands"
     ]
   },
-  "minOToolsVersion": "0.8.6"
+  "minOToolsVersion": "0.8.6",
+  "openSourceUrl": "https://github.com/ootools/otools-effectcraft"
 }
