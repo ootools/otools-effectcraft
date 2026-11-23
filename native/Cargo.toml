@@ -27,17 +27,21 @@ effectcraft-automation = { path = "../upstream/crates/automation" }
 effectcraft-engine = { path = "../upstream/crates/engine" }
 effectcraft-host = { path = "../upstream/crates/host" }
 serde_json = "1"
-
-# 上游 workspace 里的 `[patch.crates-io]` **不会**跟着 path 依赖带过来：补丁只在
-# 发起构建的那个 workspace 根节点生效。craft-pdf 依赖打过补丁的 hayro-syntax
-# （`DecodeLimits`），少了这一段会退回 crates.io 的未打补丁版本。
-# 上游更新后要同步这里。
 [patch.crates-io]
-hayro-syntax = { git = "https://github.com/storytold/craft-libs", rev = "9f75d3dc19b4b514c4f3d4847ed1ec1b0e86b4ef", version = "=0.7.2" }
-hayro-jbig2 = { git = "https://github.com/storytold/craft-libs", rev = "9f75d3dc19b4b514c4f3d4847ed1ec1b0e86b4ef", version = "=0.3.0" }
-
-# cdylib 必须可 unwind：插件 FFI 边界在插件内部捕获 panic，
-# 若 release profile 设成 abort，宿主会整体被杀。
+hayro-syntax = { git = "https://github.com/storytold/craft-libs", rev = "068e079c7be4b100a8a6b305b31ac881e069727e", version = "=0.7.2" }
+hayro-jbig2 = { git = "https://github.com/storytold/craft-libs", rev = "068e079c7be4b100a8a6b305b31ac881e069727e", version = "=0.3.0" }
+ecolor = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+emath = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+epaint = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+epaint_default_fonts = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui-winit = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui-wgpu = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui_glow = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui_extras = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui_kittest = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+eframe = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+winit = { git = "https://github.com/storytold/winit.git", rev = "a517b3846ee8457d84ee4975110bfda6797c44dc" }
 [profile.release]
 panic = "unwind"
 opt-level = 3
