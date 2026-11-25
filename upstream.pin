@@ -3,7 +3,7 @@
   "ssh": "git@github.com:storytold/effectcraft.git",
   "https": "https://github.com/storytold/effectcraft.git",
   "ref": "main",
-  "commit": "7e2d0256209974ffb92a29d8bdb6f2a49078f51f",
+  "commit": "59aed45057561ff2ca0e3c27ab849eebbfaf71dc",
   "strategy": "shallow-fetch-pinned-commit",
   "note": "上游代码不入库。改这个 commit 并跑 node scripts/fetch-upstream.mjs 即可同步；务必用完整 SHA，保证可复现。"
 }
